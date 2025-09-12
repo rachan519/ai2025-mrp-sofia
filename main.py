@@ -5,12 +5,15 @@ A three-agent system that creates personalized learning plans
 
 import os
 import json
+import numpy as np
 from typing import Dict, Any
 
 from models import UserInput, LearningFormat
 from workflow import LearningPlanWorkflow
 from config import GOOGLE_API_KEY
 from explanation_display import ExplanationDisplay, display_explanations_interactive
+from integrated_explainer import IntegratedExplainabilitySystem
+from explanation_visualizer import AdvancedExplanationVisualizer
 
 def print_learning_plan(plan: Dict[str, Any]) -> None:
     """Pretty print the complete learning plan"""
@@ -143,6 +146,66 @@ def main():
             explanation_choice = input("\n🔍 Would you like to view agent explanations? (y/n): ").lower().strip()
             if explanation_choice in ['y', 'yes']:
                 display_explanations_interactive(explanations)
+            
+            # Advanced explainability with LIME/SHAP
+            advanced_choice = input("\n🔬 Would you like advanced model-agnostic explanations (LIME/SHAP)? (y/n): ").lower().strip()
+            if advanced_choice in ['y', 'yes']:
+                try:
+                    # Check if feature extractor and predictor are available
+                    if not hasattr(workflow, 'feature_extractor') or workflow.feature_extractor is None:
+                        print("⚠️ Feature extractor not available. Creating new one...")
+                        from feature_extractor import LearningPlanFeatureExtractor
+                        workflow.feature_extractor = LearningPlanFeatureExtractor()
+                    
+                    if not hasattr(workflow, 'predictor') or workflow.predictor is None:
+                        print("⚠️ Predictor not available. Creating new one...")
+                        from feature_extractor import LearningPlanPredictor
+                        workflow.predictor = LearningPlanPredictor()
+                        
+                        # Fit predictor with sample data
+                        from feature_extractor import create_sample_learning_plans
+                        sample_plans = create_sample_learning_plans()
+                        sample_plans.append(learning_plan)
+                        X, feature_names = workflow.feature_extractor.fit_transform(sample_plans)
+                        workflow.feature_extractor.feature_names = feature_names
+                        y = np.array([0.8, 0.9, 0.7])
+                        workflow.predictor.fit(X, y)
+                        print("✅ Predictor fitted with sample data")
+                    
+                    # Create integrated explainability system
+                    integrated_system = IntegratedExplainabilitySystem(
+                        workflow.feature_extractor,
+                        workflow.predictor,
+                        workflow.explanation_logger
+                    )
+                    
+                    # Generate integrated explanation
+                    integrated_explanation = integrated_system.explain_learning_plan(
+                        learning_plan, explanations, include_lime=True, include_shap=True
+                    )
+                    
+                    # Display integrated explanation
+                    print("\n" + "="*80)
+                    print("🔬 INTEGRATED EXPLANATION (LIME + SHAP + Agent Reasoning)")
+                    print("="*80)
+                    integrated_system.print_explanation(integrated_explanation)
+                    
+                    # Visualization option
+                    viz_choice = input("\n📊 Would you like to see visualizations? (y/n): ").lower().strip()
+                    if viz_choice in ['y', 'yes']:
+                        visualizer = AdvancedExplanationVisualizer()
+                        visualizer.plot_integrated_explanation(integrated_explanation)
+                    
+                    # Save integrated explanation
+                    save_integrated_choice = input("\n💾 Save integrated explanation? (y/n): ").lower().strip()
+                    if save_integrated_choice in ['y', 'yes']:
+                        integrated_file = f"integrated_explanation_{user_input.topic.replace(' ', '_').lower()}.json"
+                        integrated_system.save_explanation(integrated_explanation, integrated_file)
+                        print(f"✅ Integrated explanation saved to {integrated_file}")
+                        
+                except Exception as e:
+                    print(f"⚠️ Could not generate advanced explanations: {e}")
+                    print("   Falling back to basic agent explanations only.")
             
             # Save explanations option
             save_explanations_choice = input("\n💾 Would you like to save explanations to a file? (y/n): ").lower().strip()

@@ -3,10 +3,12 @@ from langgraph.graph import StateGraph, END
 # MemorySaver not needed for basic workflow
 # ToolExecutor not needed for this implementation
 import json
+import numpy as np
 
 from models import AgentState, CompleteLearningPlan, UserInput, AgentExplanation
 from agents import GapAnalysisAgent, TopicPlanningAgent, TopicDetailAgent, PlanCombinerAgent
 from explanation_logger import ExplanationLogger
+from feature_extractor import LearningPlanFeatureExtractor, LearningPlanPredictor
 
 class LearningPlanWorkflow:
     """LangGraph workflow for creating personalized learning plans"""
@@ -20,6 +22,11 @@ class LearningPlanWorkflow:
         
         # Initialize explanation logger
         self.explanation_logger = ExplanationLogger()
+        
+        # Initialize feature extractor and predictor for LIME/SHAP
+        self.feature_extractor = LearningPlanFeatureExtractor()
+        self.predictor = LearningPlanPredictor()
+        self._is_predictor_fitted = False
         
         # Memory saver not needed for basic workflow
         
@@ -159,7 +166,35 @@ class LearningPlanWorkflow:
         print(f"🧠 Agent reasoning: {explanation.chain_of_thought.final_reasoning if explanation.chain_of_thought else 'N/A'}")
         return state
     
-    # Iteration logic removed - single pass workflow
+    def _fit_predictor_if_needed(self, learning_plan: CompleteLearningPlan):
+        """Fit the predictor with sample data if not already fitted"""
+        if not self._is_predictor_fitted:
+            try:
+                # Create sample learning plans for training
+                from feature_extractor import create_sample_learning_plans
+                sample_plans = create_sample_learning_plans()
+                
+                # Add the current learning plan to the sample
+                sample_plans.append(learning_plan)
+                
+                # Extract features and fit predictor
+                X, feature_names = self.feature_extractor.fit_transform(sample_plans)
+                self.feature_extractor.feature_names = feature_names
+                
+                # Create synthetic target values (effectiveness scores)
+                y = np.array([0.8, 0.9, 0.7])  # Sample effectiveness scores
+                
+                # Fit predictor
+                self.predictor.fit(X, y)
+                self._is_predictor_fitted = True
+                
+                print("✅ Predictor fitted with sample data for LIME/SHAP explanations")
+                
+            except Exception as e:
+                print(f"⚠️ Could not fit predictor: {e}")
+                # Set to None to indicate failure
+                self.feature_extractor = None
+                self.predictor = None
     
     def create_learning_plan(self, user_input: UserInput) -> CompleteLearningPlan:
         """Execute the complete workflow to create a learning plan"""
@@ -181,13 +216,18 @@ class LearningPlanWorkflow:
             
             # LangGraph returns a dictionary, so we need to access it differently
             if isinstance(final_state, dict) and 'complete_plan' in final_state:
+                learning_plan = final_state['complete_plan']
                 print(f"\n🎉 Learning plan creation completed successfully!")
-                return final_state['complete_plan']
             elif hasattr(final_state, 'complete_plan') and final_state.complete_plan:
+                learning_plan = final_state.complete_plan
                 print(f"\n🎉 Learning plan creation completed successfully!")
-                return final_state.complete_plan
             else:
                 raise Exception("Workflow completed but no learning plan was generated")
+            
+            # Fit predictor for LIME/SHAP explanations
+            self._fit_predictor_if_needed(learning_plan)
+            
+            return learning_plan
                 
         except Exception as e:
             print(f"❌ Error in workflow execution: {e}")

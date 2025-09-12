@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Learning Plan Generator using LangChain AI 2 and LangGraph
 A three-agent system that creates personalized learning plans
@@ -119,11 +118,6 @@ def main():
     # Check for API key
     if not GOOGLE_API_KEY:
         print("❌ Error: GOOGLE_API_KEY not found in environment variables.")
-        print("Please set your Gemini API key in the .env file or as an environment variable.")
-        print("\nTo set up:")
-        print("1. Create a .env file in the project directory")
-        print("2. Add: GOOGLE_API_KEY=your_actual_api_key_here")
-        print("3. Get your API key from: https://makersuite.google.com/app/apikey")
         return
     
     try:

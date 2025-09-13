@@ -373,7 +373,8 @@ def create_integrated_system() -> IntegratedExplainabilitySystem:
     explanation_logger = ExplanationLogger()
     
     # Create sample data and fit predictor
-    learning_plans = feature_extractor.create_sample_learning_plans()
+    from feature_extractor import create_sample_learning_plans
+    learning_plans = create_sample_learning_plans()
     X, feature_names = feature_extractor.fit_transform(learning_plans)
     y = np.array([0.8, 0.9])  # Sample effectiveness scores
     predictor.fit(X, y)
@@ -390,7 +391,8 @@ def demonstrate_integrated_explainability():
     system = create_integrated_system()
     
     # Create sample learning plan
-    learning_plans = system.feature_extractor.create_sample_learning_plans()
+    from feature_extractor import create_sample_learning_plans
+    learning_plans = create_sample_learning_plans()
     learning_plan = learning_plans[0]
     
     # Create sample agent explanations

@@ -69,7 +69,10 @@ class AdvancedExplanationVisualizer:
                                     explanation: LIMEExplanation,
                                     top_n: int,
                                     show_values: bool) -> None:
-        """Plot LIME feature importance"""
+        """Plot LIME feature importance with clear, non-overlapping labels"""
+        # Clear the axis first to prevent label bleeding
+        ax.clear()
+        
         # Get top N features
         sorted_features = sorted(explanation.feature_importance.items(), 
                                key=lambda x: abs(x[1]), reverse=True)[:top_n]
@@ -80,42 +83,58 @@ class AdvancedExplanationVisualizer:
         
         features, values = zip(*sorted_features)
         
-        # Create horizontal bar chart with better spacing
-        y_pos = np.arange(len(features)) * (1 + self.config.spacing)
+        # Create horizontal bar chart with optimal spacing
+        y_pos = np.arange(len(features)) * 0.8
         colors = [self.config.color_positive if v > 0 else self.config.color_negative for v in values]
         
-        bars = ax.barh(y_pos, values, height=self.config.bar_height, color=colors, alpha=0.8, 
-                      edgecolor='black', linewidth=0.3)
+        bars = ax.barh(y_pos, values, height=0.6, color=colors, alpha=0.8, 
+                      edgecolor='black', linewidth=0.2)
         
-        # Add value labels with better positioning
+        # Calculate proper axis limits with extra space for labels
+        x_min = min(values) * 1.4 if min(values) < 0 else min(values) * 0.6
+        x_max = max(values) * 1.4 if max(values) > 0 else max(values) * 0.6
+        
+        # Add value labels with proper positioning and spacing
         if show_values:
             for i, (bar, value) in enumerate(zip(bars, values)):
-                width = bar.get_width()
-                # Position labels outside bars to avoid overlap
-                label_x = width + (0.005 if width > 0 else -0.005)
-                ax.text(label_x, bar.get_y() + bar.get_height()/2,
-                       f'{value:.3f}', ha='left' if width > 0 else 'right', va='center', 
-                       fontsize=self.config.label_size, fontweight='bold')
+                if abs(value) > 0.001:  # Only show labels for significant values
+                    width = bar.get_width()
+                    # Position labels well outside the bars to prevent overlap
+                    if width > 0:  # Positive values - label on the right
+                        label_x = x_max * 0.95  # Position at 95% of max x
+                        ha = 'right'
+                    else:  # Negative values - label on the left
+                        label_x = x_min * 0.95  # Position at 95% of min x
+                        ha = 'left'
+                    
+                    # Add background box to make labels more readable
+                    ax.text(label_x, bar.get_y() + bar.get_height()/2,
+                           f'{value:.3f}', ha=ha, va='center', 
+                           fontsize=7, fontweight='bold',
+                           bbox=dict(boxstyle='round,pad=0.15', facecolor='white', 
+                                   alpha=0.9, edgecolor='gray', linewidth=0.5))
         
-        # Formatting with better label handling
+        # Format labels with proper truncation
         ax.set_yticks(y_pos)
-        # Truncate long feature names and add ellipsis
         formatted_features = []
         for f in features:
             formatted = f.replace('_', ' ').title()
-            if len(formatted) > 20:
-                formatted = formatted[:17] + '...'
+            if len(formatted) > 12:
+                formatted = formatted[:9] + '...'
             formatted_features.append(formatted)
         
-        ax.set_yticklabels(formatted_features, fontsize=self.config.label_size)
-        ax.set_xlabel('Feature Importance', fontsize=self.config.font_size, fontweight='bold')
-        ax.set_title('LIME Feature Importance', fontsize=self.config.title_size, fontweight='bold', pad=20)
+        ax.set_yticklabels(formatted_features, fontsize=8)
+        ax.set_xlabel('Feature Importance', fontsize=9, fontweight='bold')
         ax.grid(axis='x', alpha=0.3, linestyle='--')
-        ax.axvline(0, color='black', linestyle='-', alpha=0.5, linewidth=1)
+        ax.axvline(0, color='black', linestyle='-', alpha=0.5, linewidth=0.8)
         
-        # Adjust layout to prevent label overlap
-        ax.tick_params(axis='y', labelsize=self.config.label_size)
-        ax.tick_params(axis='x', labelsize=self.config.label_size)
+        # Set axis limits with proper margins
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(-0.5, len(features) - 0.5)
+        
+        # Adjust layout to prevent overlap
+        ax.tick_params(axis='y', labelsize=8)
+        ax.tick_params(axis='x', labelsize=8)
     
     def _plot_lime_prediction_breakdown(self, ax: plt.Axes, explanation: LIMEExplanation) -> None:
         """Plot LIME prediction breakdown"""
@@ -227,7 +246,10 @@ class AdvancedExplanationVisualizer:
                             explanation: SHAPExplanation,
                             top_n: int,
                             show_values: bool) -> None:
-        """Plot SHAP feature importance"""
+        """Plot SHAP feature importance with clear, non-overlapping labels"""
+        # Clear the axis first to prevent label bleeding
+        ax.clear()
+        
         # Get top N features by absolute SHAP value
         sorted_features = sorted(explanation.shap_values.items(), 
                                key=lambda x: abs(x[1]), reverse=True)[:top_n]
@@ -238,23 +260,49 @@ class AdvancedExplanationVisualizer:
         
         features, values = zip(*sorted_features)
         
-        # Create horizontal bar chart
-        y_pos = np.arange(len(features))
-        bars = ax.barh(y_pos, np.abs(values), color=self.config.color_neutral, alpha=0.7, edgecolor='black', linewidth=0.5)
+        # Create horizontal bar chart with optimal spacing
+        y_pos = np.arange(len(features)) * 0.8
+        bars = ax.barh(y_pos, np.abs(values), color=self.config.color_neutral, alpha=0.7, 
+                      edgecolor='black', linewidth=0.2, height=0.6)
         
-        # Add value labels
+        # Calculate proper axis limits with extra space for labels
+        max_val = max(np.abs(values)) if values else 1
+        x_max = max_val * 1.4
+        
+        # Add value labels with proper positioning and spacing
         if show_values:
             for i, (bar, value) in enumerate(zip(bars, values)):
-                width = bar.get_width()
-                ax.text(width + 0.01, bar.get_y() + bar.get_height()/2,
-                       f'{value:.3f}', ha='left', va='center', fontsize=9)
+                if abs(value) > 0.001:  # Only show labels for significant values
+                    # Position labels well outside the bars to prevent overlap
+                    label_x = x_max * 0.95  # Position at 95% of max x
+                    
+                    # Add background box to make labels more readable
+                    ax.text(label_x, bar.get_y() + bar.get_height()/2,
+                           f'{value:.3f}', ha='right', va='center', 
+                           fontsize=7, fontweight='bold',
+                           bbox=dict(boxstyle='round,pad=0.15', facecolor='white', 
+                                   alpha=0.9, edgecolor='gray', linewidth=0.5))
         
-        # Formatting
+        # Format labels with proper truncation
         ax.set_yticks(y_pos)
-        ax.set_yticklabels([f.replace('_', ' ').title() for f in features], fontsize=9)
-        ax.set_xlabel('|SHAP Value|', fontsize=self.config.font_size)
-        ax.set_title('Feature Importance', fontsize=self.config.font_size, fontweight='bold')
-        ax.grid(axis='x', alpha=0.3)
+        formatted_features = []
+        for f in features:
+            formatted = f.replace('_', ' ').title()
+            if len(formatted) > 12:
+                formatted = formatted[:9] + '...'
+            formatted_features.append(formatted)
+        
+        ax.set_yticklabels(formatted_features, fontsize=8)
+        ax.set_xlabel('|SHAP Value|', fontsize=9, fontweight='bold')
+        ax.grid(axis='x', alpha=0.3, linestyle='--')
+        
+        # Set axis limits with proper margins
+        ax.set_xlim(0, x_max)
+        ax.set_ylim(-0.5, len(features) - 0.5)
+        
+        # Adjust layout
+        ax.tick_params(axis='y', labelsize=8)
+        ax.tick_params(axis='x', labelsize=8)
     
     def _plot_shap_prediction_flow(self, ax: plt.Axes, explanation: SHAPExplanation) -> None:
         """Plot SHAP prediction flow"""
@@ -319,48 +367,48 @@ class AdvancedExplanationVisualizer:
     def plot_integrated_explanation(self, 
                                   explanation: IntegratedExplanation,
                                   save_path: Optional[str] = None) -> None:
-        """Create comprehensive integrated explanation visualization"""
-        fig = plt.figure(figsize=(24, 18))
-        gs = fig.add_gridspec(3, 3, hspace=0.4, wspace=0.4)
+        """Create simplified 4-chart explanation visualization with complete isolation"""
+        # Use optimal figure size for 4 charts
+        fig = plt.figure(figsize=(18, 12))
+        
+        # Create a 2x2 grid with very generous spacing
+        gs = fig.add_gridspec(2, 2, hspace=0.6, wspace=0.5)
         
         # Title
-        fig.suptitle('Integrated Learning Plan Explanation', fontsize=20, fontweight='bold')
+        fig.suptitle('Integrated Learning Plan Explanation', fontsize=16, fontweight='bold', y=0.95)
         
-        # Plot 1: Learning plan overview
-        ax1 = fig.add_subplot(gs[0, :])
-        self._plot_learning_plan_overview(ax1, explanation)
-        
-        # Plot 2: LIME explanation (if available)
+        # Plot 1: LIME Analysis (top-left)
+        ax1 = fig.add_subplot(gs[0, 0])
+        ax1.set_title('LIME Analysis', fontsize=14, fontweight='bold', pad=20)
         if explanation.lime_explanation:
-            ax2 = fig.add_subplot(gs[1, 0])
-            self._plot_lime_feature_importance(ax2, explanation.lime_explanation, 10, True)
-            ax2.set_title('LIME Analysis', fontsize=14, fontweight='bold')
+            self._plot_lime_feature_importance(ax1, explanation.lime_explanation, 6, True)
+        else:
+            ax1.text(0.5, 0.5, 'LIME Analysis\nNot Available', ha='center', va='center', 
+                    transform=ax1.transAxes, fontsize=12, style='italic')
+            ax1.axis('off')
         
-        # Plot 3: SHAP explanation (if available)
+        # Plot 2: SHAP Analysis (top-right)
+        ax2 = fig.add_subplot(gs[0, 1])
+        ax2.set_title('SHAP Analysis', fontsize=14, fontweight='bold', pad=20)
         if explanation.shap_explanation:
-            ax3 = fig.add_subplot(gs[1, 1])
-            self._plot_shap_importance(ax3, explanation.shap_explanation, 10, True)
-            ax3.set_title('SHAP Analysis', fontsize=14, fontweight='bold')
+            self._plot_shap_importance(ax2, explanation.shap_explanation, 6, True)
+        else:
+            ax2.text(0.5, 0.5, 'SHAP Analysis\nNot Available', ha='center', va='center', 
+                    transform=ax2.transAxes, fontsize=12, style='italic')
+            ax2.axis('off')
         
-        # Plot 4: Global feature importance
-        ax4 = fig.add_subplot(gs[1, 2])
-        self._plot_global_importance(ax4, explanation.global_feature_importance, 10)
-        ax4.set_title('Global Importance', fontsize=14, fontweight='bold')
+        # Plot 3: Agent Confidence (bottom-left)
+        ax3 = fig.add_subplot(gs[1, 0])
+        ax3.set_title('Agent Confidence', fontsize=14, fontweight='bold', pad=20)
+        self._plot_agent_confidence(ax3, explanation.agent_explanations)
         
-        # Plot 5: Agent confidence
-        ax5 = fig.add_subplot(gs[2, 0])
-        self._plot_agent_confidence(ax5, explanation.agent_explanations)
-        ax5.set_title('Agent Confidence', fontsize=14, fontweight='bold')
+        # Plot 4: Prediction Summary (bottom-right)
+        ax4 = fig.add_subplot(gs[1, 1])
+        ax4.set_title('Prediction Summary', fontsize=14, fontweight='bold', pad=20)
+        self._plot_prediction_summary(ax4, explanation)
         
-        # Plot 6: Prediction summary
-        ax6 = fig.add_subplot(gs[2, 1])
-        self._plot_prediction_summary(ax6, explanation)
-        ax6.set_title('Prediction Summary', fontsize=14, fontweight='bold')
-        
-        # Plot 7: Recommendations
-        ax7 = fig.add_subplot(gs[2, 2])
-        self._plot_recommendations(ax7, explanation)
-        ax7.set_title('Recommendations', fontsize=14, fontweight='bold')
+        # Ensure tight layout to prevent overlap
+        plt.tight_layout()
         
         if save_path:
             plt.savefig(save_path, dpi=self.config.dpi, bbox_inches='tight')
@@ -426,7 +474,10 @@ Confidence: {explanation.confidence:.3f}"""
         ax.tick_params(axis='x', labelsize=self.config.label_size)
     
     def _plot_agent_confidence(self, ax: plt.Axes, agent_explanations: List[Any]) -> None:
-        """Plot agent confidence levels"""
+        """Plot agent confidence levels with clear labels"""
+        # Clear the axis first to prevent label bleeding
+        ax.clear()
+        
         if not agent_explanations:
             ax.text(0.5, 0.5, 'No agent data', ha='center', va='center', transform=ax.transAxes)
             return
@@ -434,37 +485,40 @@ Confidence: {explanation.confidence:.3f}"""
         agents = [exp.agent_name for exp in agent_explanations]
         confidences = [exp.confidence_score for exp in agent_explanations]
         
-        # Create bars with better spacing
+        # Create bars with optimal spacing
         x_pos = np.arange(len(agents))
         bars = ax.bar(x_pos, confidences, color=self.config.color_neutral, alpha=0.8, 
-                     edgecolor='black', linewidth=0.3)
+                     edgecolor='black', linewidth=0.2, width=0.6)
         
         # Add value labels
         for bar, conf in zip(bars, confidences):
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02,
-                   f'{conf:.3f}', ha='center', va='bottom', 
-                   fontsize=self.config.label_size, fontweight='bold')
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
+                   f'{conf:.2f}', ha='center', va='bottom', 
+                   fontsize=9, fontweight='bold')
         
-        # Format agent names
+        # Format agent names with proper truncation
         formatted_agents = []
         for agent in agents:
-            if len(agent) > 15:
-                formatted_agents.append(agent[:12] + '...')
+            if len(agent) > 10:
+                formatted_agents.append(agent[:7] + '...')
             else:
                 formatted_agents.append(agent)
         
         ax.set_xticks(x_pos)
-        ax.set_xticklabels(formatted_agents, fontsize=self.config.label_size, rotation=45, ha='right')
-        ax.set_ylabel('Confidence', fontsize=self.config.font_size, fontweight='bold')
-        ax.set_title('Agent Confidence Levels', fontsize=self.config.title_size, fontweight='bold', pad=20)
+        ax.set_xticklabels(formatted_agents, fontsize=9, rotation=45, ha='right')
+        ax.set_ylabel('Confidence', fontsize=10, fontweight='bold')
         ax.set_ylim(0, 1.1)
+        ax.set_xlim(-0.5, len(agents) - 0.5)
         ax.grid(axis='y', alpha=0.3, linestyle='--')
         
         # Adjust layout
-        ax.tick_params(axis='y', labelsize=self.config.label_size)
+        ax.tick_params(axis='y', labelsize=9)
     
     def _plot_prediction_summary(self, ax: plt.Axes, explanation: IntegratedExplanation) -> None:
-        """Plot prediction summary"""
+        """Plot prediction summary with clear labels"""
+        # Clear the axis first to prevent label bleeding
+        ax.clear()
+        
         # Create summary metrics
         metrics = {
             'Prediction': explanation.prediction,
@@ -473,28 +527,29 @@ Confidence: {explanation.confidence:.3f}"""
             'Feature Count': len(explanation.global_feature_importance)
         }
         
-        # Create bar chart with better spacing
+        # Create bar chart with optimal spacing
         names = list(metrics.keys())
         values = list(metrics.values())
         x_pos = np.arange(len(names))
         
         bars = ax.bar(x_pos, values, color=self.config.color_neutral, alpha=0.8, 
-                     edgecolor='black', linewidth=0.3)
+                     edgecolor='black', linewidth=0.2, width=0.6)
         
         # Add value labels
         for bar, value in zip(bars, values):
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02,
-                   f'{value:.3f}', ha='center', va='bottom', 
-                   fontsize=self.config.label_size, fontweight='bold')
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
+                   f'{value:.2f}', ha='center', va='bottom', 
+                   fontsize=9, fontweight='bold')
         
         ax.set_xticks(x_pos)
-        ax.set_xticklabels(names, fontsize=self.config.label_size, rotation=45, ha='right')
-        ax.set_ylabel('Value', fontsize=self.config.font_size, fontweight='bold')
-        ax.set_title('Prediction Summary', fontsize=self.config.title_size, fontweight='bold', pad=20)
+        ax.set_xticklabels(names, fontsize=9, rotation=45, ha='right')
+        ax.set_ylabel('Value', fontsize=10, fontweight='bold')
+        ax.set_ylim(0, max(values) * 1.2 if values else 1)
+        ax.set_xlim(-0.5, len(names) - 0.5)
         ax.grid(axis='y', alpha=0.3, linestyle='--')
         
         # Adjust layout
-        ax.tick_params(axis='y', labelsize=self.config.label_size)
+        ax.tick_params(axis='y', labelsize=9)
     
     def _plot_recommendations(self, ax: plt.Axes, explanation: IntegratedExplanation) -> None:
         """Plot recommendations"""
@@ -527,8 +582,9 @@ def demonstrate_visualizations():
     
     # Create sample data
     from integrated_explainer import create_integrated_system
+    from feature_extractor import create_sample_learning_plans
     system = create_integrated_system()
-    learning_plans = system.feature_extractor.create_sample_learning_plans()
+    learning_plans = create_sample_learning_plans()
     
     # Create visualizer
     visualizer = AdvancedExplanationVisualizer()
